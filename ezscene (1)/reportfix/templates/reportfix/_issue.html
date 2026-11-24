@@ -1,0 +1,39 @@
+{% load rf %}{% comment %}One issue row. Expects `i` (decorated by ui.decorate) and `me`; `full` shows admin actions (issue page only).
+Status pill colours follow the brand guide; the three dashes show reported -> being fixed -> confirmed.{% endcomment %}
+<div class="issue">
+  <div class="head">
+    <div>
+      <a class="title" href="/issues/{{ i.issue_code }}/">{{ i.general_title }} <span class="muted" style="font-weight:400">· {{ i.report_count }} report{{ i.report_count|pluralize }}</span></a>
+      <div class="meta">{{ i.location }} → {{ i.department }} · {{ i.issue_code }} · {{ i.updated_at|timesince }} ago</div>
+    </div>
+    <div class="right">
+      <span class="dashes">{% for on in i.status|progress %}<i class="{% if on %}on{% endif %}"></i>{% endfor %}</span>
+      {% if i.confidential %}<span class="pill s-conf">Confidential</span>{% endif %}
+      {% if i.priority == "CRITICAL" or i.priority == "HIGH" %}<span class="pill {{ i.priority|prio_class }}">{{ i.priority|title }}</span>{% endif %}
+      <span class="pill {{ i.status|status_class }}">{{ i.status|status_label }}</span>
+    </div>
+  </div>
+  {% if i.voting_open and i.is_affected and me.role == "student" %}
+  <div class="vote">
+    <b>{% if i.status == "no_issue" %}Staff checked and found no issue. Do you agree?{% else %}Staff marked this fixed. Is it really fixed?{% endif %}</b>
+    <div class="tiny muted">Confirm {{ i.confirm_w }} vs dispute {{ i.dispute_w }} · needs {{ i.need_w }}{% if i.my_vote %} · your vote: {{ i.my_vote }}{% endif %}</div>
+    <div class="actions">
+      <form method="post" action="/issues/{{ i.issue_code }}/vote/">{% csrf_token %}<input type="hidden" name="value" value="confirm">
+        <button class="btn primary sm">{% if i.status == "no_issue" %}Agree, no issue{% else %}Yes, it's fixed{% endif %}</button></form>
+      <form method="post" action="/issues/{{ i.issue_code }}/vote/">{% csrf_token %}<input type="hidden" name="value" value="dispute">
+        <button class="btn outline sm">{% if i.status == "no_issue" %}No, the problem is real{% else %}Still broken{% endif %}</button></form>
+    </div>
+  </div>
+  {% endif %}
+  {% if me.role == "student" and not i.is_affected and not i.confidential and i.status != "verified" and i.status != "closed" and i.status != "spam" %}
+  <div class="actions"><form method="post" action="/issues/{{ i.issue_code }}/join/">{% csrf_token %}<button class="btn outline sm">+ Me too</button></form></div>
+  {% endif %}
+  {% if i.can_manage and i.status != "verified" and i.status != "closed" and i.status != "spam" %}{% if me.role == "staff" or full %}
+  <div class="actions">
+    <form method="post" action="/issues/{{ i.issue_code }}/status/">{% csrf_token %}<input type="hidden" name="status" value="in_progress"><button class="btn outline sm">Start work</button></form>
+    <form method="post" action="/issues/{{ i.issue_code }}/status/">{% csrf_token %}<input type="hidden" name="status" value="resolved"><button class="btn primary sm">Mark fixed</button></form>
+    <form method="post" action="/issues/{{ i.issue_code }}/status/">{% csrf_token %}<input type="hidden" name="status" value="no_issue"><button class="btn ghost sm">Checked: no issue</button></form>
+    <form method="post" action="/issues/{{ i.issue_code }}/status/" onsubmit="return confirm('Mark as spam? Reporters lose 15 trust.')">{% csrf_token %}<input type="hidden" name="status" value="spam"><button class="btn danger sm">Spam</button></form>
+  </div>
+  {% endif %}{% endif %}
+</div>

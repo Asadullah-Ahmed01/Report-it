@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ReportFix</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --ink:#1d2330; --muted:#5f6b7a; --line:#e3e7ee; --accent:#2155d6;
+          --crit:#c62828; --high:#e65100; --med:#b28704; --low:#4a6b4f; --conf:#6a1b9a; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--ink); }
+  header { position:sticky; top:0; z-index:5; background:#121826; color:#fff; padding:10px 16px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  header h1 { font-size:18px; margin:0 12px 0 0; }
+  header select, header button { font:inherit; padding:6px 10px; border-radius:6px; border:1px solid #3a4458; background:#1f2738; color:#fff; }
+  header button:hover { background:#2b3550; cursor:pointer; }
+  .pill { font-size:12px; padding:3px 8px; border-radius:999px; background:#2b3550; }
+  .who { margin-left:auto; font-size:13px; opacity:.9; }
+  main { max-width:1200px; margin:0 auto; padding:16px; display:grid; grid-template-columns: 1fr 340px; gap:16px; }
+  @media (max-width: 900px) { main { grid-template-columns:1fr; } }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px; margin-bottom:16px; }
+  .card h2 { font-size:15px; margin:0 0 10px; }
+  textarea { width:100%; min-height:80px; font:inherit; padding:10px; border:1px solid var(--line); border-radius:8px; resize:vertical; }
+  button.btn { font:inherit; padding:6px 12px; border-radius:6px; border:1px solid var(--line); background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button.danger { color:var(--crit); }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .issue { border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:10px; background:#fff; }
+  .issue.conf { border-color:#d9c3e6; background:#fbf7fd; }
+  .row { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  .title { font-weight:600; }
+  .code { font-family:ui-monospace,Consolas,monospace; color:var(--muted); font-size:12px; }
+  .badge { font-size:11px; font-weight:600; padding:2px 7px; border-radius:999px; color:#fff; text-transform:uppercase; letter-spacing:.02em; }
+  .CRITICAL { background:var(--crit); } .HIGH { background:var(--high); } .MEDIUM { background:var(--med); } .LOW { background:var(--low); }
+  .st { background:#e9edf5; color:#29324a; } .st.reopened { background:#fde7e7; color:#a11; } .st.resolved { background:#fff3cd; color:#7a5b00; }
+  .st.verified { background:#e2f4e5; color:#1d6b2c; } .st.spam { background:#eee; color:#777; }
+  .confb { background:var(--conf); } .haz { background:#000; }
+  .muted { color:var(--muted); font-size:12px; }
+  .msg { padding:10px; border-radius:8px; margin-top:10px; background:#eef3ff; border:1px solid #cdd9ff; }
+  .msg.warn { background:#fff6e5; border-color:#ffd99a; } .msg.err { background:#fdeaea; border-color:#f3b4b4; }
+  details summary { cursor:pointer; color:var(--accent); font-size:12px; margin-top:6px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  td, th { text-align:left; padding:5px 6px; border-bottom:1px solid var(--line); vertical-align:top; }
+  .log li { margin-bottom:4px; }
+  .plus { color:#1d6b2c; font-weight:600; } .minus { color:var(--crit); font-weight:600; }
+  .tabs button { margin-right:6px; }
+  .tabs button.on { background:var(--ink); color:#fff; border-color:var(--ink); }
+</style>
+</head>
+<body>
+<header>
+  <h1>ReportFix</h1>
+  <span id="judgeBar" style="display:none;gap:8px;align-items:center">
+    <span class="pill" style="background:#7a4b00" title="Hackathon rule: switch to any user in one click, no passwords. Set JUDGE_MODE=0 to require login.">Judge mode</span>
+    <select id="userSelect" title="Switch user (no password, judge mode)"></select>
+    <button id="newStudent" title="Create a brand-new student and switch to them">+ New student</button>
+    <button id="resetBtn" title="Reset all data to the seed">Reset data</button>
+  </span>
+  <span class="pill" id="aiPill">AI: …</span>
+  <span class="who" id="who"></span>
+  <button id="logoutBtn" style="display:none">Sign out</button>
+</header>
+<main>
+  <section id="mainCol"></section>
+  <aside id="sideCol"></aside>
+</main>
+
+<script>
+const $ = (s, el=document) => el.querySelector(s);
+let me = null, users = [], places = [], studentTab = "mine";
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt = iso => new Date(iso).toLocaleString([], {hour:"2-digit", minute:"2-digit", month:"short", day:"numeric"});
+
+const csrf = () => (document.cookie.match(/(?:^|; )csrftoken=([^;]+)/) || [])[1] || "";
+async function api(path, opts={}) {
+  const res = await fetch(path, {method: opts.method || "GET", headers: {"Content-Type":"application/json", "X-CSRFToken": csrf()},
+    body: opts.body ? JSON.stringify(opts.body) : undefined, credentials: "same-origin"});
+  let data = {}; try { data = await res.json(); } catch (e) {}
+  data._status = res.status;
+  if (res.status === 401 && !path.startsWith("/api/auth")) { me = null; showLogin(data.error); }
+  return data;
+}
+
+let judgeMode = false;
+function showLogin(note) {
+  $("#judgeBar").style.display = judgeMode ? "flex" : "none";
+  $("#logoutBtn").style.display = "none"; $("#who").textContent = ""; $("#sideCol").innerHTML = ""; lastRole = null;
+  $("#mainCol").innerHTML = `<div class="card" style="max-width:420px"><h2>Sign in</h2>
+    ${note ? `<div class="msg warn">${esc(note)}</div>` : ""}
+    <div class="row" style="margin:8px 0"><label><input type="radio" name="portal" value="" checked> Detect from my login</label> ${["student","staff","admin"].map(p => `<label><input type="radio" name="portal" value="${p}"> ${p[0].toUpperCase()+p.slice(1)}</label>`).join(" ")}</div>
+    <input id="lu" placeholder="CMS ID, Staff ID or email" autocomplete="username" style="width:100%;padding:8px;margin-bottom:8px;border:1px solid var(--line);border-radius:6px">
+    <input id="lp" type="password" placeholder="Password" autocomplete="current-password" style="width:100%;padding:8px;margin-bottom:8px;border:1px solid var(--line);border-radius:6px">
+    <button class="btn primary" id="loginBtn">Sign in</button>
+    <div id="loginMsg"></div>
+    <p class="muted">Each account may only use its own portal: a student login cannot open the staff or admin portal.</p></div>`;
+  $("#loginBtn").onclick = doLogin; $("#lp").onkeydown = e => { if (e.key === "Enter") doLogin(); };
+}
+async function doLogin() {
+  const portal = document.querySelector('input[name=portal]:checked').value;
+  const d = await api("/api/auth/login", {method:"POST", body:{portal, username:$("#lu").value, password:$("#lp").value}});
+  if (d._status !== 200) { $("#loginMsg").innerHTML = `<div class="msg err">${esc(d.error)}</div>`; return; }
+  await boot();
+}
+
+async function loadUsers() {
+  const d = await api("/api/users"); users = d.users || [];
+  const groups = {student:"Students", staff:"Department staff", admin:"Admin"};
+  $("#userSelect").innerHTML = Object.entries(groups).map(([role,label]) =>
+    `<optgroup label="${label}">` + users.filter(u => u.role === role).map(u =>
+      `<option value="${esc(u.code)}">${esc(u.name)} · ${esc(u.code)}${u.department ? " · " + esc(u.department) : ""}${u.role==="student" ? " · trust " + u.trust : ""}</option>`).join("") + `</optgroup>`).join("");
+  if (me) $("#userSelect").value = me.code;
+}
+
+async function loadSession() {
+  const d = await api("/api/session"); if (!d.user) return; me = d.user;
+  $("#logoutBtn").style.display = d.via === "password" ? "" : "none";
+  $("#userSelect").value = me.code;
+  $("#who").textContent = `${me.name} · ${me.cmsId ? "CMS " + me.cmsId : me.staffId ? me.staffId : me.code} — ${me.role}${me.department ? " (" + me.department + ")" : ""}${me.role === "student" ? ` · trust ${me.trust} · vote weight ${me.weight}${me.isNew ? " (new account)" : ""}` : ""}`;
+}
+
+async function loadHealth() {
+  const d = await api("/api/health");
+  const a = d.ai || {};
+  $("#aiPill").textContent = a.configured ? (a.last_error ? "AI: Gemini (last call failed → keyword fallback)" : `AI: Gemini (${a.model})`) : "AI: keyword fallback (no key)";
+  $("#aiPill").title = a.last_error || "";
+}
+
+function issueCard(i) {
+  const badges = [
+    `<span class="badge ${i.priority}">${i.priority}</span>`,
+    `<span class="badge st ${i.status}">${i.status.replace("_"," ")}</span>`,
+    i.hazard ? `<span class="badge haz">hazard: ${esc(i.hazard)}</span>` : "",
+    i.confidential ? `<span class="badge confb">confidential</span>` : "",
+  ].join(" ");
+  let actions = "";
+  if (me.role === "student" && !i.confidential && !i.isAffected && !["spam","verified","closed"].includes(i.status))
+    actions += `<button class="btn" onclick="joinIssue('${i.code}')">Me too</button>`;
+  if (me.role === "student" && i.isAffected && i.votingOpen) {
+    const noIssue = i.status === "no_issue";
+    actions += `<span class="muted">${noIssue ? "Staff checked and found no issue. Agree?" : "Staff say this is fixed. Is it?"}</span>
+      <button class="btn ${i.myVote==='confirm'?'primary':''}" onclick="voteIssue('${i.code}','confirm')">${noIssue ? "Agree, no issue" : "Confirm fixed"}</button>
+      <button class="btn danger ${i.myVote==='dispute'?'primary':''}" onclick="voteIssue('${i.code}','dispute')">${noIssue ? "No, the problem is real" : "Still broken"}</button>`;
+  }
+  if (i.canManage && !["spam","verified","closed"].includes(i.status)) {
+    actions += `<button class="btn" onclick="setStatus('${i.code}','in_progress')">In progress</button>
+      <button class="btn primary" onclick="setStatus('${i.code}','resolved')">Mark resolved</button>
+      <button class="btn" onclick="setStatus('${i.code}','no_issue')">Checked: no issue</button>
+      <button class="btn danger" onclick="setStatus('${i.code}','spam')">Spam / fake</button>`;
+  }
+  const votes = (i.status === "resolved" || i.round > 0)
+    ? `<div class="muted">Round ${i.round} votes — confirm ${i.confirmWeight} vs dispute ${i.disputeWeight} (needs ${i.votesNeeded})${i.myVote ? " · your vote: " + i.myVote : ""}</div>` : "";
+  return `<div class="issue ${i.confidential ? "conf" : ""}">
+    <div class="row"><span class="code">${esc(i.code)}</span> <span class="title">${esc(i.displayTitle)}</span> ${badges}</div>
+    <div class="muted">${esc(i.place)} → <b>${esc(i.department)}</b> · score ${i.score}${i.resolvedBy ? " · last handled by " + esc(i.resolvedBy) : ""}</div>
+    <div style="margin-top:4px">${esc(i.reason)}</div>
+    <div class="muted">Priority: ${esc(i.priorityReason)}</div>
+    ${votes}
+    ${actions ? `<div class="row" style="margin-top:8px">${actions}</div>` : ""}
+    <details><summary>${i.reports.length} report(s) · history</summary>
+      <ul>${i.reports.map(r => `<li>"${esc(r.text)}" — <b>${esc(r.reporter)}</b>, ${fmt(r.at)} <span class="muted">[${esc(r.source)}${r.flags.length ? ", " + esc(r.flags.join(", ")) : ""}]</span></li>`).join("")}</ul>
+      <ul class="muted">${i.history.map(h => `<li>${fmt(h.at)} · ${esc(h.status)} · ${esc(h.by)}${h.note ? " — " + esc(h.note) : ""}</li>`).join("")}</ul>
+    </details>
+  </div>`;
+}
+
+function list(items, empty) { return items.length ? items.map(issueCard).join("") : `<p class="muted">${empty}</p>`; }
+
+async function renderStudent() {
+  const tab = studentTab;
+  const d = await api(`/api/issues?view=${tab}`);
+  let pending = "";
+  if (tab === "mine" && d.pending && d.pending.length) {
+    pending = `<div class="card"><h2>Needs a place</h2>${d.pending.map(p => `<div class="issue"><div>"${esc(p.text)}"</div>
+      <div class="muted">${p.mention ? `'${esc(p.mention)}' is not on the campus map.` : "No place was named."} Pick one:</div>
+      <div class="row" style="margin-top:6px">${places.map(pl => `<button class="btn" onclick="clarify(${p.id},'${pl.id}')">${esc(pl.name)}</button>`).join("")}</div></div>`).join("")}</div>`;
+  }
+  $("#lists").innerHTML = pending + `<div class="card"><div class="tabs row" style="margin-bottom:10px">
+      <button class="btn ${tab==='mine'?'on':''}" onclick="studentTab='mine';renderStudent()">My issues</button>
+      <button class="btn ${tab==='board'?'on':''}" onclick="studentTab='board';renderStudent()">Campus board</button></div>
+      ${list(d.issues || [], tab === "mine" ? "You haven't reported or joined anything yet." : "No public issues.")}</div>`;
+}
+
+function studentShell() {
+  $("#mainCol").innerHTML = `<div class="card"><h2>Report a problem</h2>
+    <textarea id="reportText" placeholder="English, Roman Urdu or both. e.g. 'Lab 3 ka projector kharab hai'"></textarea>
+    <div class="row" style="margin-top:8px"><button class="btn primary" id="submitReport">Submit report</button>
+    <span class="muted">AI reads the text; rules decide department, priority and privacy.</span></div>
+    <div id="reportResult"></div></div><div id="lists"></div>`;
+  $("#submitReport").onclick = submitReport;
+}
+
+async function submitReport() {
+  const text = $("#reportText").value.trim(); if (!text) return;
+  $("#submitReport").disabled = true; $("#reportResult").innerHTML = `<div class="msg">Reading your report…</div>`;
+  const d = await api("/api/reports", {method:"POST", body:{text}});
+  $("#submitReport").disabled = false;
+  if (d.outcome === "needs_clarification") {
+    $("#reportResult").innerHTML = `<div class="msg warn">${esc(d.message)}<div class="row" style="margin-top:6px">${(d.suggestions||[]).map(pl =>
+      `<button class="btn" onclick="clarify(${d.report.id},'${pl.id}')">${esc(pl.name)}</button>`).join("")}</div></div>`;
+  } else if (d.ok) {
+    $("#reportText").value = "";
+    $("#reportResult").innerHTML = `<div class="msg">${d.injectionIgnored ? "<b>Instructions inside the report were ignored (treated as data).</b><br>" : ""}${esc(d.message)}</div>` + (d.issue ? issueCard(d.issue) : "");
+  } else {
+    $("#reportResult").innerHTML = `<div class="msg err">${esc(d.message || d.error || "Could not submit")}</div>`;
+  }
+  await Promise.all([loadSession(), refresh()]);
+}
+
+async function clarify(reportId, placeId) {
+  const d = await api(`/api/reports/${reportId}/clarify`, {method:"POST", body:{placeId}});
+  const box = $("#reportResult");
+  if (box) box.innerHTML = d.ok ? `<div class="msg">${esc(d.message)}</div>` + (d.issue ? issueCard(d.issue) : "") : `<div class="msg err">${esc(d.message || d.error)}</div>`;
+  refresh();
+}
+
+async function joinIssue(code) { const d = await api(`/api/issues/${code}/join`, {method:"POST"}); toast(d.message || d.error); refresh(); }
+async function voteIssue(code, value) { const d = await api(`/api/issues/${code}/vote`, {method:"POST", body:{value}}); toast(d.message || d.error); await loadSession(); refresh(); }
+async function setStatus(code, status) { const d = await api(`/api/issues/${code}/status`, {method:"POST", body:{status}}); toast(d.message || d.error); refresh(); }
+
+function toast(text) {
+  let t = $("#toast"); if (!t) { t = document.createElement("div"); t.id = "toast";
+    t.style.cssText = "position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#121826;color:#fff;padding:10px 14px;border-radius:8px;max-width:90%;z-index:9"; document.body.appendChild(t); }
+  t.textContent = text; t.style.display = "block"; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = "none", 5000);
+}
+
+async function renderStaff() {
+  const d = await api("/api/issues?view=queue");
+  if (!me.department) { $("#mainCol").innerHTML = `<div class="card"><h2>No department assigned</h2><p>The admin hasn't assigned you to a department yet. Once they do, your queue appears here automatically.</p></div>`; return; }
+  $("#mainCol").innerHTML = `<div class="card"><h2>${esc(me.department)} queue</h2><p class="muted">You only see issues routed to ${esc(me.department)}. Confidential reports never appear here.</p>${list(d.issues || [], "Queue is empty.")}</div>`;
+}
+
+let adminState = "pending";
+async function renderAdmin() {
+  const [all, flags, acc, cmp, stf, stu] = await Promise.all([api("/api/issues?view=all"), api("/api/admin/flags"), api("/api/admin/accounts"),
+    api(`/api/admin/complaints?state=${adminState}`), api("/api/admin/staff?all=1"), api("/api/admin/students")]);
+  const conf = (all.issues||[]).filter(i => i.confidential), pub = (cmp.issues||[]).filter(i => !i.confidential);
+  const depts = (stf.departments||[]);
+  const deptSel = (cur, id) => `<select onchange="assignStaff('${id}', this.value)"><option value="">— none —</option>${depts.map(d => `<option value="${d.code}" ${d.code===cur?"selected":""}>${esc(d.code)}</option>`).join("")}</select>`;
+  const keepSummary = $("#summaryBox") ? $("#summaryBox").innerHTML : `<p class="muted">Click to generate.</p>`;
+  $("#mainCol").innerHTML = `
+    <div class="card"><h2>Admin summary</h2><div id="summaryBox">${keepSummary}</div>
+      <button class="btn primary" onclick="loadSummary()">Generate summary</button></div>
+    <div class="card"><h2>Flags (spam · injection · brigading)</h2>${(flags.flags||[]).length ? `<table>${flags.flags.map(f =>
+      `<tr><td><span class="badge st">${esc(f.kind)}</span></td><td>${esc(f.note)}${f.users.length ? `<div class="muted">accounts: ${esc(f.users.join(", "))}</div>` : ""}</td><td class="muted">${fmt(f.at)}</td></tr>`).join("")}</table>` : `<p class="muted">No flags.</p>`}</div>
+    <div class="card"><h2>Accounts & logins</h2><p class="muted">Which credential may open which portal. Passwords are stored only as salted hashes.</p>
+      <details><summary>${(acc.accounts||[]).length} accounts</summary><table><tr><th>Username</th><th>Name</th><th>Portal</th><th>Dept</th><th>Status</th><th>Last login</th></tr>${(acc.accounts||[]).map(a =>
+        `<tr><td class="code">${esc(a.username)}</td><td>${esc(a.name)}</td><td>${esc(a.portal)}</td><td>${esc(a.department||"")}</td><td>${a.locked ? "locked" : a.active ? "active" : "disabled"}${a.failedAttempts ? ` · ${a.failedAttempts} failed` : ""}</td><td class="muted">${a.lastLogin ? fmt(a.lastLogin) : "—"}</td></tr>`).join("")}</table></details>
+      <details><summary>Recent sign-in attempts (${(acc.attempts||[]).length})</summary><table>${(acc.attempts||[]).map(a =>
+        `<tr><td>${a.success ? "✔" : "✖"}</td><td class="code">${esc(a.username)}</td><td>${esc(a.portal)}</td><td>${esc(a.reason)}</td><td class="muted">${esc(a.ip)} · ${fmt(a.at)}</td></tr>`).join("")}</table></details></div>
+    <div class="card"><h2>Confidential queue (${conf.length})</h2><p class="muted">Harassment / ragging. Admin only; reporters are never shown.</p>${list(conf, "None.")}</div>
+    <div class="card"><h2>Complaints</h2>
+      <div class="tabs row" style="margin-bottom:8px">${["pending","active","completed","all"].map(t => `<button class="btn ${adminState===t?'on':''}" onclick="adminState='${t}';renderAdmin()">${t[0].toUpperCase()+t.slice(1)}${cmp.counts && cmp.counts[t] !== undefined ? " (" + cmp.counts[t] + ")" : ""}</button>`).join("")}</div>
+      <p class="muted">${esc((cmp.definitions||{})[adminState] || "Every complaint.")}</p>
+      ${(cmp.awaitingPlace||[]).length ? `<div class="msg warn">${cmp.awaitingPlace.length} report(s) waiting for the student to pick a place: ${cmp.awaitingPlace.map(r => `"${esc(r.text)}" (${esc(r.student)})`).join("; ")}</div>` : ""}
+      ${list(pub, "None in this group.")}</div>
+    <div class="card"><h2>Download reports</h2><div class="row">
+      <a class="btn primary" href="/api/admin/reports?period=weekly" download>Weekly report (CSV)</a>
+      <a class="btn primary" href="/api/admin/reports?period=monthly" download>Monthly report (CSV)</a></div>
+      <p class="muted">Weekly = last 7 days, monthly = last 30 days: totals by status and department, staff ratings, every issue.</p></div>
+    <div class="card"><h2>Staff (${(stf.staff||[]).filter(x => x.active).length} active)</h2>
+      <table><tr><th>Staff ID</th><th>Name</th><th>Designation</th><th>Department</th><th>Rating</th><th>Contact</th><th></th></tr>${(stf.staff||[]).map(x =>
+        `<tr style="${x.active ? "" : "opacity:.5"}"><td class="code">${esc(x.staffId)}</td><td>${esc(x.name)}</td><td>${esc(x.designation)}</td><td>${deptSel(x.department, x.staffId)}</td><td>${x.rating}</td><td class="muted">${esc(x.email)}<br>${esc(x.phone)}</td>
+        <td>${x.active ? `<button class="btn danger" onclick="removeStaff('${x.staffId}')">Remove</button>` : `<button class="btn" onclick="removeStaff('${x.staffId}', true)">Restore</button>`}</td></tr>`).join("")}</table>
+      <div class="row" style="margin-top:10px"><input id="nsName" placeholder="New staff name" style="padding:6px;border:1px solid var(--line);border-radius:6px">
+        <input id="nsDesig" placeholder="Designation" style="padding:6px;border:1px solid var(--line);border-radius:6px">
+        <select id="nsDept"><option value="">— department —</option>${depts.map(d => `<option value="${d.code}">${esc(d.code)}</option>`).join("")}</select>
+        <button class="btn primary" onclick="addStaff()">Add staff</button></div><div id="nsMsg"></div></div>
+    <div class="card"><h2>Students (${(stu.students||[]).length})</h2><details><summary>Show all</summary><table><tr><th>CMS ID</th><th>Name</th><th>Email</th><th>Phone</th><th>Program</th><th>Trust</th><th>Complaints</th></tr>${(stu.students||[]).map(x =>
+        `<tr><td class="code">${esc(x.cmsId)}</td><td>${esc(x.name)}</td><td class="muted">${esc(x.email)}</td><td class="muted">${esc(x.phone)}</td><td>${esc(x.program)} ${x.semester}${esc(x.section)}</td><td>${x.trust}</td><td>${x.complaints}</td></tr>`).join("")}</table></details></div>`;
+}
+
+async function assignStaff(id, dept) { const d = await api(`/api/admin/staff/${id}/assign`, {method:"POST", body:{department: dept}}); toast(d.message || d.error); renderAdmin(); }
+async function removeStaff(id, restore=false) { if (!restore && !confirm("Remove this staff member? They will not be able to sign in (history is kept).")) return;
+  const d = await api(`/api/admin/staff/${id}/remove`, {method:"POST", body:{restore}}); toast(d.message || d.error); renderAdmin(); }
+async function addStaff() {
+  const d = await api("/api/admin/staff", {method:"POST", body:{name:$("#nsName").value, designation:$("#nsDesig").value, department:$("#nsDept").value}});
+  if (d.error) { toast(d.error); return; }
+  await renderAdmin(); $("#nsMsg").innerHTML = `<div class="msg">Added ${esc(d.staff.name)}. Sign-in: <b>${esc(d.credentials.username)}</b> (or ${esc(d.credentials.email)}) / <b>${esc(d.credentials.password)}</b> — shown once.</div>`;
+}
+async function loadSummary() {
+  $("#summaryBox").innerHTML = `<p class="muted">Writing summary…</p>`;
+  const d = await api("/api/admin/summary");
+  $("#summaryBox").innerHTML = `<pre style="white-space:pre-wrap;font:inherit">${esc(d.summary || d.error)}</pre><div class="muted">source: ${esc(d.source)}${d.aiError ? " · AI error: " + esc(d.aiError) : ""}</div>`;
+}
+
+async function renderSide() {
+  const tr = await api("/api/trending");
+  let html = `<div class="card"><h2>Trending</h2>${(tr.issues||[]).map(i => `<div style="margin-bottom:8px"><span class="badge ${i.priority}">${i.priority}</span> <b>${esc(i.displayTitle)}</b><div class="muted">${esc(i.place)} · me too ${i.meTooCount} · ${esc(i.status)}</div></div>`).join("") || `<p class="muted">Nothing yet.</p>`}</div>`;
+  const rated = users.filter(u => u.role === "student" || u.role === "staff");
+  html += `<div class="card"><h2>Ratings</h2><p class="muted">Students: trust. Staff: service rating. Click a name to see why.</p><table>${rated.map(u =>
+    `<tr><td><a href="#" onclick="showTrust('${u.code}');return false">${esc(u.name)}</a> <span class="code">${esc(u.code)}</span></td><td>${u.rating}</td><td class="muted">${u.role === "staff" ? esc(u.department) : "w " + u.weight}</td></tr>`).join("")}</table><div id="trustBox"></div></div>`;
+  $("#sideCol").innerHTML = html;
+}
+
+async function showTrust(code) {
+  const d = await api(`/api/users/${code}/trust`);
+  $("#trustBox").innerHTML = `<h2 style="margin-top:12px">${esc(d.user.name)}: ${d.trust}${d.user.role === "student" ? ` (weight ${d.weight})` : " (staff rating)"}</h2><div class="muted">${esc(d.weightRule)}</div>
+    <ul class="log">${d.log.map(e => `<li><span class="${e.delta>0?'plus':e.delta<0?'minus':''}">${e.delta>0?'+':''}${e.delta}</span> → ${e.score}: ${esc(e.reason)} <span class="muted">${fmt(e.at)}</span></li>`).join("")}</ul>`;
+}
+
+let lastRole = null;
+async function refresh() {
+  if (!me) return;
+  if (me.role !== lastRole || (me.role === "student" && !$("#reportText"))) {
+    lastRole = me.role; $("#mainCol").innerHTML = "";
+    if (me.role === "student") studentShell();
+  }
+  if (me.role === "student") await renderStudent();
+  else if (me.role === "staff") await renderStaff();
+  else await renderAdmin();
+  if (judgeMode || me.role === "admin") await loadUsers(); else users = (await api("/api/users")).users || [];
+  await renderSide();
+}
+
+$("#userSelect").onchange = async e => { await api("/api/session", {method:"POST", body:{userId:e.target.value}}); lastRole = null; await loadSession(); refresh(); };
+$("#newStudent").onclick = async () => { const name = prompt("Name for the new student (optional):") || ""; const d = await api("/api/users", {method:"POST", body:{name}}); lastRole = null; await loadUsers(); await loadSession(); refresh(); toast(d.credentials ? `New student ${d.user.name} selected. Login: ${d.credentials.username} / ${d.credentials.password} (shown once)` : (d.error || "Created.")); };
+$("#resetBtn").onclick = async () => { if (!confirm("Reset all data to the seed?")) return; await api("/api/reset", {method:"POST"}); lastRole = null; await loadUsers(); await loadSession(); refresh(); toast("Data reset."); };
+
+$("#logoutBtn").onclick = async () => { await api("/api/auth/logout", {method:"POST"}); me = null; showLogin("Signed out."); };
+
+async function boot() {
+  places = (await api("/api/places")).places || [];
+  const who = await api("/api/auth/me"); judgeMode = !!who.judgeMode;
+  $("#judgeBar").style.display = judgeMode ? "flex" : "none";
+  await loadHealth();
+  if (!who.user && !judgeMode) { showLogin(); return; }
+  await loadSession(); if (!me) return;
+  if (judgeMode) await loadUsers();
+  await refresh();
+}
+boot();
+setInterval(() => { if (!me) return; if (document.activeElement && ["reportText","lu","lp"].includes(document.activeElement.id)) return; loadSession().then(refresh); loadHealth(); }, 7000);
+</script>
+</body>
+</html>

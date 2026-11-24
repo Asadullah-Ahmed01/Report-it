@@ -1,0 +1,59 @@
+{% extends "reportfix/base.html" %}{% load rf %}
+{% block title %}Home{% endblock %}
+{% block heading %}Hi {{ me.name }}{% endblock %}
+{% block sub %}{{ stats.open }} open · {{ stats.done }} done · CMS {{ me.code }}{% endblock %}
+{% block content %}
+<div class="grid g2" style="align-items:start">
+  <div>
+    <div class="card">
+      <h2>Report a problem</h2>
+      <form method="post" action="/report/">{% csrf_token %}
+        <textarea name="text" placeholder="What's wrong and where? e.g. “Library ka AC kaam nahi kar raha”" required maxlength="2000"></textarea>
+        <div class="row" style="margin-top:14px;justify-content:space-between">
+          <span class="muted small">English, Roman Urdu or both. Same problem, same place → added to the existing issue.</span>
+          <button class="btn primary">Send report →</button>
+        </div>
+      </form>
+      {% if last %}
+        <div class="flash {% if last.outcome == 'needs_clarification' %}warn{% elif last.outcome == 'rejected' %}error{% else %}ok{% endif %}" style="margin:18px 0 0">
+          {% if last.injection %}<b>Instructions inside your report were ignored and treated as plain text.</b><br>{% endif %}
+          {{ last.message }}{% if last.issue %} <a href="/issues/{{ last.issue }}/">Open {{ last.issue }}</a>{% endif %}
+        </div>
+      {% endif %}
+    </div>
+    {% if pending %}
+    <div class="card">
+      <h2>Where is this?</h2>
+      {% for r in pending %}
+        <p style="margin:0 0 10px">“{{ r.raw_text }}”</p>
+        <form method="post" action="/report/{{ r.id }}/clarify/" class="row" style="margin-bottom:18px">{% csrf_token %}
+          <select name="place" required><option value="">Pick the place…</option>{% for p in places %}<option value="{{ p.id }}">{{ p.name }} ({{ p.dept }})</option>{% endfor %}</select>
+          <button class="btn primary sm">Send to department</button>
+        </form>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <div class="card">
+      <div class="row" style="justify-content:space-between;margin-bottom:8px"><h2 style="margin:0">In progress</h2><a href="/board/">Campus board</a></div>
+      {% for i in issues %}{% include "reportfix/_issue.html" %}{% empty %}<div class="empty">Nothing yet. Reports you file or join show here with their live status.</div>{% endfor %}
+    </div>
+  </div>
+  <div>
+    <div class="card ink">
+      <div class="label">My trust rating</div>
+      <div class="row" style="margin-top:10px"><span class="hero-n" style="font-size:52px">{{ me.trust_score|five }}</span><span class="stars" style="font-size:22px;color:var(--cyan)">{{ me.trust_score|stars }}</span></div>
+      <p style="color:#d6d6d6;margin:6px 0 16px">{{ me.trust_score|floatformat:0 }} / 100. Goes up when your reports and votes prove right; down for fake reports or "no issue" findings.</p>
+      <a class="btn cyan sm" href="/people/{{ me.code }}/">See why</a>
+    </div>
+    <div class="grid g3" style="margin-top:20px">
+      <div class="card stat"><div class="l">My issues</div><div class="n">{{ stats.total }}</div></div>
+      <div class="card stat"><div class="l">Open</div><div class="n" style="color:var(--teal)">{{ stats.open }}</div></div>
+      <div class="card stat"><div class="l">Done</div><div class="n" style="color:var(--ok)">{{ stats.done }}</div></div>
+    </div>
+    <div class="card soft" style="margin-top:20px">
+      <b style="color:var(--info)">Harassment or ragging?</b>
+      <div class="small" style="color:var(--info)">Report it here. It goes only to the admin, never to the board or any department, and your name is never shown.</div>
+    </div>
+  </div>
+</div>
+{% endblock %}

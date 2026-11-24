@@ -1,0 +1,46 @@
+{% extends "reportfix/base.html" %}{% load rf %}
+{% block title %}Overview{% endblock %}
+{% block heading %}NUST · Military College of Signals{% endblock %}
+{% block sub %}Admin overview · complaints across all departments{% endblock %}
+{% block content %}
+<div class="grid" style="grid-template-columns: 1.15fr 1fr; margin-bottom:20px">
+  <div class="card ink">
+    <div class="label">Open safety hazards</div>
+    <div class="hero-n">{{ critical }}</div>
+    <p style="color:#d6d6d6;margin:4px 0 18px">Fire, sparks, gas and medical reports are always critical, however calmly they're written.</p>
+    <div class="row"><a class="btn cyan" href="/api/admin/reports?period=weekly">Weekly report</a><a class="btn ghost" href="/api/admin/reports?period=monthly">Monthly report</a></div>
+  </div>
+  <div class="grid" style="grid-template-columns:1fr 1fr">
+    <div class="card stat"><div class="l">Pending</div><div class="n">{{ counts.pending }}</div><div class="s" style="color:var(--wait)">waiting for staff</div></div>
+    <div class="card stat"><div class="l">Active</div><div class="n">{{ counts.active }}</div><div class="s" style="color:var(--teal)">in progress or awaiting students</div></div>
+    <div class="card stat"><div class="l">Completed</div><div class="n">{{ counts.completed }}</div><div class="s" style="color:var(--ok)">verified, closed or spam</div></div>
+    <div class="card stat"><div class="l">Need a place</div><div class="n" style="color:var(--bad)">{{ awaiting|length }}</div><div class="s muted">waiting for the student</div></div>
+  </div>
+</div>
+<div class="grid g2" style="align-items:start">
+  <div class="card">
+    <div class="pills">
+      <a href="?state=pending" class="{% if state == 'pending' %}on{% endif %}">Pending ({{ counts.pending }})</a>
+      <a href="?state=active" class="{% if state == 'active' %}on{% endif %}">Active ({{ counts.active }})</a>
+      <a href="?state=completed" class="{% if state == 'completed' %}on{% endif %}">Completed ({{ counts.completed }})</a>
+      <a href="?state=all" class="{% if state == 'all' %}on{% endif %}">All</a>
+    </div>
+    {% if state == "pending" and awaiting %}
+      <div class="flash warn">{% for r in awaiting %}“{{ r.raw_text }}” ({{ r.user.name }}) named a place that isn't on the campus map.{% if not forloop.last %}<br>{% endif %}{% endfor %}</div>
+    {% endif %}
+    {% for i in issues %}{% include "reportfix/_issue.html" %}{% empty %}<div class="empty">Nothing in this group.</div>{% endfor %}
+  </div>
+  <div>
+    <div class="card">
+      <h2>Open by department</h2>
+      {% for d in by_dept %}<div class="list-row"><span class="avatar {% cycle 'c' 'p' 'b' '' %}">{{ d.department|slice:":2"|upper }}</span><span style="flex:1">{{ d.department }}</span><b>{{ d.n }}</b></div>
+      {% empty %}<div class="muted">None</div>{% endfor %}
+    </div>
+    <div class="card">
+      <h2>Alerts</h2>
+      {% for f in flags %}<div class="list-row"><span class="pill {% if f.kind == 'brigading' %}s-bad{% elif f.kind == 'injection' %}s-wait{% else %}s-open{% endif %}">{{ f.kind }}</span><span class="small">{{ f.note }}</span></div>
+      {% empty %}<div class="muted small">No spam, injection or brigading alerts.</div>{% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

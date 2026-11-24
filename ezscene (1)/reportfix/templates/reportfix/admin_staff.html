@@ -1,0 +1,38 @@
+{% extends "reportfix/base.html" %}{% load rf %}
+{% block title %}Staff{% endblock %}
+{% block heading %}Staff{% endblock %}
+{% block sub %}A staff member's log in always opens the queue of the department assigned here.{% endblock %}
+{% block content %}
+<div class="card">
+  <table>
+    <tr><th>Staff</th><th>Staff ID</th><th>Contact</th><th>Department</th><th>Rating</th><th>Handled</th><th></th></tr>
+    {% for s in staff %}
+    <tr style="{% if not s.is_active %}opacity:.45{% endif %}">
+      <td><div class="row" style="flex-wrap:nowrap"><span class="avatar {% cycle 'c' 'p' 'b' '' %}">{{ s.name|initials }}</span><div><b>{{ s.name }}</b><div class="tiny muted">{{ s.designation }}</div></div></div></td>
+      <td class="mono">{{ s.staff_id }}</td>
+      <td class="small">{{ s.email }}<div class="muted">{{ s.phone }}</div></td>
+      <td><form method="post">{% csrf_token %}<input type="hidden" name="action" value="assign"><input type="hidden" name="staff_id" value="{{ s.staff_id }}">
+          <select name="department" onchange="this.form.submit()" {% if not s.is_active %}disabled{% endif %}><option value="">— none —</option>
+            {% for d in departments %}<option value="{{ d.code }}" {% if d.code == s.department_id %}selected{% endif %}>{{ d.code }}</option>{% endfor %}</select></form></td>
+      <td><span class="stars">{{ s.profile.trust_score|stars }}</span> <span class="tiny muted">{{ s.profile.trust_score|floatformat:0 }}</span></td>
+      <td>{{ s.handled }}</td>
+      <td><form method="post" {% if s.is_active %}onsubmit="return confirm('Remove {{ s.name }}? They will no longer be able to log in. History is kept.')"{% endif %}>{% csrf_token %}
+          <input type="hidden" name="staff_id" value="{{ s.staff_id }}">
+          {% if s.is_active %}<button class="btn danger sm" name="action" value="remove">Remove</button>{% else %}<button class="btn outline sm" name="action" value="restore">Restore</button>{% endif %}</form></td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+<div class="card">
+  <h2>Add staff</h2>
+  <form method="post" class="row">{% csrf_token %}<input type="hidden" name="action" value="add">
+    <input name="name" placeholder="Full name" required>
+    <input name="designation" placeholder="Designation">
+    <input name="email" placeholder="Email (optional)">
+    <input name="phone" placeholder="Phone, 11 digits" pattern="\d{11}">
+    <select name="department"><option value="">Department…</option>{% for d in departments %}<option value="{{ d.code }}">{{ d.code }}</option>{% endfor %}</select>
+    <button class="btn primary">Add staff</button>
+  </form>
+  <p class="muted small" style="margin-bottom:0">A Staff ID and a one-time password are generated and shown once.</p>
+</div>
+{% endblock %}

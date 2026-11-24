@@ -1,0 +1,21 @@
+{% extends "reportfix/base.html" %}{% load rf %}
+{% block title %}Students{% endblock %}
+{% block heading %}Students{% endblock %}
+{% block sub %}{{ students|length }} student{{ students|length|pluralize }}{% if q %} matching “{{ q }}”{% endif %}{% endblock %}
+{% block content %}
+<div class="card">
+  <form method="get" class="row" style="margin-bottom:16px"><input name="q" value="{{ q }}" placeholder="Search name, CMS ID or email" style="width:360px"><button class="btn primary sm">Search</button></form>
+  <table>
+    <tr><th>Student</th><th>CMS ID</th><th>Email</th><th>Phone</th><th>Program</th><th>Trust</th><th>Reports</th></tr>
+    {% for s in students %}
+    <tr>
+      <td><div class="row" style="flex-wrap:nowrap"><span class="avatar {% cycle 'c' 'p' 'b' '' %}">{{ s.name|initials }}</span><a href="/people/{{ s.cms_id }}/" style="color:var(--ink)">{{ s.name }}</a></div></td>
+      <td class="mono">{{ s.cms_id }}</td><td class="small">{{ s.email }}</td><td class="small muted">{{ s.phone }}</td>
+      <td class="small">{{ s.program }} · sem {{ s.semester }}{{ s.section }}</td>
+      <td><span class="stars">{{ s.profile.trust_score|stars }}</span> <span class="tiny muted">{{ s.profile.trust_score|floatformat:0 }}</span></td>
+      <td>{{ s.n_reports }}</td>
+    </tr>
+    {% empty %}<tr><td colspan="7" class="empty">No students match.</td></tr>{% endfor %}
+  </table>
+</div>
+{% endblock %}

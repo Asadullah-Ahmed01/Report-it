@@ -1,0 +1,14 @@
+{% extends "reportfix/base.html" %}
+{% block title %}Reports{% endblock %}
+{% block heading %}Reports{% endblock %}
+{% block sub %}CSV files that open in Excel or Google Sheets.{% endblock %}
+{% block content %}
+<div class="grid" style="grid-template-columns:1fr 1fr">
+  <div class="card ink"><div class="label">Weekly</div><h2 style="color:#fff;margin-top:8px">The last 7 days</h2>
+    <p style="color:#d6d6d6">Complaints received, issues by status and department, staff ratings, and every issue.</p>
+    <a class="btn cyan" href="/api/admin/reports?period=weekly">Download weekly CSV</a></div>
+  <div class="card"><div class="label">Monthly</div><h2 style="margin-top:8px">The last 30 days</h2>
+    <p class="muted">The same sections over a month.</p>
+    <a class="btn primary" href="/api/admin/reports?period=monthly">Download monthly CSV</a></div>
+</div>
+{% endblock %}

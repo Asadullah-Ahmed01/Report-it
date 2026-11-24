@@ -1,0 +1,61 @@
+{% load rf %}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{% block title %}EzScene{% endblock %} · EzScene</title>
+{% include "reportfix/_theme.html" %}
+</head>
+<body>
+{% comment %}App shell from the EzScene guide: white top bar (menu, wordmark, role tag, avatar), white sidebar with a
+cyan-tint active item, Canvas content area. Every page fills the `content` block.{% endcomment %}
+<header class="top">
+  <svg class="burger" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+  <a class="logo" href="/" aria-label="EzScene home">{% include "reportfix/_logo.html" %}</a>
+  {% if me %}<span class="role">{% if me.role == "student" %}Student{% elif me.role == "staff" %}{{ me.department|default:"Staff" }}{% else %}Admin{% endif %}</span>{% endif %}
+  <span class="spacer"></span>
+  {% if judge_mode %}
+  <div class="judge" title="Hackathon rule: switch to any user in one click, no password">
+    <span class="tag">JUDGE</span>
+    <form method="post" action="/judge/switch/">{% csrf_token %}
+      <select name="code" onchange="this.form.submit()">
+        {% if not me %}<option value="" selected disabled>Switch user…</option>{% endif %}
+        {% for u in switch_users %}<option value="{{ u.code }}" {% if me and u.code == me.code %}selected{% endif %}>{{ u.get_role_display }} · {{ u.name }}{% if u.department %} · {{ u.department }}{% endif %}</option>{% endfor %}
+      </select>
+    </form>
+    <form method="post" action="/judge/new-student/">{% csrf_token %}<button class="btn primary">+ New student</button></form>
+    <form method="post" action="/judge/reset/" onsubmit="return confirm('Reset all data to the demo seed?')">{% csrf_token %}<button class="btn ghost">Reset</button></form>
+  </div>
+  {% endif %}
+  {% if me %}<a href="/people/{{ me.code }}/" class="avatar" title="{{ me.name }}" style="text-decoration:none">{{ me.name|initials }}</a>{% endif %}
+</header>
+<div class="shell">
+  <aside class="side">
+    {% if me %}
+    <nav class="nav">
+      {% if me.role == "student" %}
+        <a href="/student/" class="{% if nav == 'student' %}on{% endif %}"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linejoin="round"><path d="M4 11l8-6 8 6v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg>Home</a>
+        <a href="/board/" class="{% if nav == 'board' %}on{% endif %}"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg>Campus board</a>
+      {% elif me.role == "staff" %}
+        <a href="/staff/{{ me.department|default:'unassigned'|lower }}/" class="{% if nav == 'staff' %}on{% endif %}"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linejoin="round"><path d="M4 11l8-6 8 6v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg>Dashboard</a>
+      {% elif me.role == "admin" %}
+        <a href="/admin/" class="{% if nav == 'admin' %}on{% endif %}"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linejoin="round"><path d="M4 11l8-6 8 6v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg>Overview</a>
+        <a href="/admin/staff/" class="{% if nav == 'staff' %}on{% endif %}"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Staff</a>
+        <a href="/admin/students/" class="{% if nav == 'students' %}on{% endif %}"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c1-3.5 3.5-5.5 6.5-5.5s5.5 2 6.5 5.5M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c1.8.8 3 2.6 3.5 5.2"/></svg>Students</a>
+        <a href="/admin/reports/" class="{% if nav == 'reports' %}on{% endif %}"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 13h6M9 17h6"/></svg>Reports</a>
+        <a href="/board/" class="{% if nav == 'board' %}on{% endif %}"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg>Campus board</a>
+      {% endif %}
+      <hr>
+      <a href="/people/{{ me.code }}/" class="{% if nav == 'me' %}on{% endif %}"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linejoin="round"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z"/></svg>{% if me.role == "admin" %}Profile{% else %}My rating{% endif %}</a>
+      <form method="post" action="/logout/">{% csrf_token %}<button class="btn ghost sm" style="margin:12px 0 0 24px">Sign out</button></form>
+    </nav>
+    <div class="foot">NUST · MCS<br>{% if me.role == "student" %}CMS {{ me.code }}{% elif me.role == "staff" %}{{ me.code }} · {{ me.department|default:"unassigned" }}{% else %}Registrar's office{% endif %}</div>
+    {% endif %}
+  </aside>
+  <main class="main">
+    <div class="pagehead"><div><h1>{% block heading %}{% endblock %}</h1><div class="sub">{% block sub %}{% endblock %}</div></div><div>{% block headaction %}{% endblock %}</div></div>
+    {% for f in flashes %}<div class="flash {{ f.kind }}">{{ f.text }}</div>{% endfor %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+</body>
+</html>

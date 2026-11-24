@@ -1,0 +1,30 @@
+{% extends "reportfix/base.html" %}{% load rf %}
+{% block title %}{{ issue.issue_code }}{% endblock %}
+{% block heading %}{{ issue.display_title }}{% endblock %}
+{% block sub %}{{ issue.location }} → {{ issue.department }} · {{ issue.issue_code }}{% endblock %}
+{% block content %}
+<div class="grid g2" style="align-items:start">
+  <div>
+    {% include "reportfix/_issue.html" with i=issue full=True %}
+    <div class="card">
+      <div class="label">Why it's routed and ranked this way</div>
+      <p style="margin:10px 0 6px">{{ issue.reason }}</p>
+      <p class="muted small" style="margin:0">Priority: {{ issue.priority_reason }}</p>
+    </div>
+    <div class="card">
+      <h2>Reports ({{ reports|length }})</h2>
+      {% for r in reports %}
+        <div class="list-row" style="align-items:flex-start"><span class="avatar {% cycle 'c' 'p' 'b' '' %}">{{ r.who|initials }}</span>
+          <div>“{{ r.text }}”<div class="tiny muted">{{ r.who }} · {{ r.at|date:"d M, H:i" }} · read by {{ r.source }}{% if r.flags %} · {{ r.flags|join:", " }}{% endif %}</div></div></div>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="card">
+    <h2>History</h2>
+    <div class="timeline small">
+      {% for e in history %}<div class="ev"><b>{{ e.status|status_label }}</b> · {{ e.by }}<div class="muted tiny">{{ e.created_at|date:"d M, H:i" }}{% if e.note %} — {{ e.note }}{% endif %}</div></div>{% endfor %}
+    </div>
+    {% if issue.resolved_by %}<p class="muted small">Last handled by {{ issue.resolved_by.name }} · <a href="/people/{{ issue.resolved_by.code }}/">rating</a></p>{% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,29 @@
+{% extends "reportfix/base.html" %}{% load rf %}
+{% block title %}{{ me.department|default:"Staff" }} dashboard{% endblock %}
+{% block heading %}Dashboard{% endblock %}
+{% block sub %}{% if me.department %}{{ department.name|default:me.department }} · {{ counts.todo }} to do · {{ counts.waiting }} waiting for students{% else %}No department assigned yet{% endif %}{% endblock %}
+{% block content %}
+{% if not me.department %}
+  <div class="card"><div class="empty">The admin hasn't assigned you to a department yet. Your queue appears here as soon as they do.</div></div>
+{% else %}
+<div class="grid" style="grid-template-columns: 1.6fr 1fr; align-items:start">
+  <div>
+    <div class="pills">
+      <a href="?tab=todo" class="{% if tab == 'todo' %}on{% endif %}">To do ({{ counts.todo }})</a>
+      <a href="?tab=waiting" class="{% if tab == 'waiting' %}on{% endif %}">Waiting for students ({{ counts.waiting }})</a>
+      <a href="?tab=done" class="{% if tab == 'done' %}on{% endif %}">Done ({{ counts.done }})</a>
+    </div>
+    {% for i in issues %}{% include "reportfix/_issue.html" %}{% empty %}<div class="card"><div class="empty">Nothing here.</div></div>{% endfor %}
+  </div>
+  <div>
+    <div class="card ink">
+      <div class="label">My staff rating</div>
+      <div class="row" style="margin-top:10px"><span class="hero-n" style="font-size:52px">{{ me.trust_score|five }}</span><span class="stars" style="font-size:22px;color:var(--cyan)">{{ me.trust_score|stars }}</span></div>
+      <p style="color:#d6d6d6;margin:6px 0 16px">+5 when students confirm your fix · −10 when they say it isn't fixed.</p>
+      <a class="btn cyan sm" href="/people/{{ me.code }}/">See history</a>
+    </div>
+    <div class="card soft" style="margin-top:20px"><span class="small" style="color:var(--info)">"Mark fixed" asks the affected students to confirm. "Checked: no issue" lowers the reporters' rating unless they prove the problem is real.</span></div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

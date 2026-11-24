@@ -1,0 +1,38 @@
+{% extends "reportfix/base.html" %}{% load rf %}
+{% block title %}{{ person.name }}{% endblock %}
+{% block heading %}{{ person.name }}{% endblock %}
+{% block sub %}{% if person.student %}CMS {{ person.student.cms_id }} · {{ person.student.program }} · semester {{ person.student.semester }}{{ person.student.section }}{% elif person.staff %}{{ person.staff.staff_id }} · {{ person.staff.designation }} · {{ person.staff.department_id|default:"unassigned" }}{% else %}Registrar admin{% endif %}{% endblock %}
+{% block content %}
+<div class="grid g2" style="align-items:start">
+  <div class="card">
+    <h2>Rating history</h2>
+    {% for e in events %}
+      <div class="list-row" style="align-items:flex-start">
+        <div style="width:52px" class="{% if e.delta > 0 %}plus{% elif e.delta < 0 %}minus{% else %}muted{% endif %}">{% if e.delta > 0 %}+{% endif %}{{ e.delta|floatformat:0 }}</div>
+        <div style="flex:1">{{ e.reason }}<div class="tiny muted">{{ e.created_at|date:"d M Y, H:i" }} · now {{ e.new_score|floatformat:0 }}</div></div>
+      </div>
+    {% empty %}<div class="empty">No rating changes.</div>{% endfor %}
+  </div>
+  <div>
+    {% if person.role != "admin" %}
+    <div class="card ink">
+      <div class="label">{% if person.role == "student" %}Trust rating{% else %}Staff rating{% endif %}</div>
+      <div class="row" style="margin-top:10px"><span class="hero-n" style="font-size:52px">{{ person.trust_score|five }}</span><span class="stars" style="font-size:22px;color:var(--cyan)">{{ person.trust_score|stars }}</span></div>
+      <p style="color:#d6d6d6;margin:6px 0 0">{{ person.trust_score|floatformat:0 }} / 100{% if weight %} · reports and votes count ×{{ weight }}{% endif %}</p>
+    </div>
+    {% endif %}
+    <div class="card">
+      {% if person.student %}
+        <div class="list-row"><span class="muted" style="width:90px">CMS ID</span><span class="mono">{{ person.student.cms_id }}</span></div>
+        {% if me.role == "admin" or me.code == person.code %}
+        <div class="list-row"><span class="muted" style="width:90px">Email</span>{{ person.student.email }}</div>
+        <div class="list-row"><span class="muted" style="width:90px">Phone</span>{{ person.student.phone }}</div>{% endif %}
+      {% elif person.staff %}
+        <div class="list-row"><span class="muted" style="width:90px">Staff ID</span><span class="mono">{{ person.staff.staff_id }}</span></div>
+        <div class="list-row"><span class="muted" style="width:90px">Email</span>{{ person.staff.email }}</div>
+        <div class="list-row"><span class="muted" style="width:90px">Phone</span>{{ person.staff.phone }}</div>
+      {% else %}<div class="muted">Admins have no rating.</div>{% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

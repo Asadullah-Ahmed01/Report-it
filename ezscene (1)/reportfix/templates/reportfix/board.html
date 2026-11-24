@@ -1,0 +1,31 @@
+{% extends "reportfix/base.html" %}{% load rf %}
+{% block title %}Campus board{% endblock %}
+{% block heading %}Campus board{% endblock %}
+{% block sub %}Open issues across campus. Confidential reports never appear here.{% endblock %}
+{% block content %}
+<div class="tiles" style="margin-bottom:22px">
+  {% for d in dept_tiles %}
+  <a class="tile {% if dept == d.code %}on{% endif %}" href="{% if dept == d.code %}/board/{% else %}/board/?dept={{ d.code }}{% endif %}">
+    <div class="band t{{ forloop.counter0 }}"><b>{{ d.code }}</b><span>{{ d.name }}</span></div>
+    <div class="body"><span>{{ d.open }} open issue{{ d.open|pluralize }}</span><span style="color:var(--teal);font-weight:600">{% if dept == d.code %}Show all{% else %}View →{% endif %}</span></div>
+  </a>
+  {% endfor %}
+</div>
+<div class="grid g2" style="align-items:start">
+  <div class="card">
+    <h2>{% if dept %}{{ dept }} issues{% else %}All open issues{% endif %}</h2>
+    {% for i in issues %}{% include "reportfix/_issue.html" %}{% empty %}<div class="empty">No open issues here.</div>{% endfor %}
+  </div>
+  <div class="card">
+    <h2>Trending</h2>
+    {% for t in trending %}
+      <div class="list-row">
+        <span class="avatar {% cycle 'c' 'p' 'b' '' %}">{{ forloop.counter }}</span>
+        <div style="flex:1"><a href="/issues/{{ t.issue_code }}/" style="color:var(--ink);text-decoration:none">{{ t.general_title }}</a>
+          <div class="tiny muted">{{ t.location }} · {{ t.report_count }} report{{ t.report_count|pluralize }}</div></div>
+        <span class="pill {{ t.priority|prio_class }}">{{ t.priority|title }}</span>
+      </div>
+    {% empty %}<div class="empty">Nothing trending.</div>{% endfor %}
+  </div>
+</div>
+{% endblock %}
